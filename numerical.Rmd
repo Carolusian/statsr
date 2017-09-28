@@ -1,5 +1,7 @@
 ---
 title: "Numerical Measures"
+author: Carolusian <https://github.com/carolusian>
+date: Sep 28, 2017
 output: html_notebook
 ---
 

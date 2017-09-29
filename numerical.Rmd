@@ -64,3 +64,8 @@ library(ggplot2)
 ggplot(mtcars, aes(x=factor(0), mpg)) +
   geom_boxplot()
 ```
+
+### Variance & Standard Deviation 
+
+```{r}
+```

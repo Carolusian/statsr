@@ -41,13 +41,26 @@ n^th^ percentile of an observation varible is the value cut off the first n perc
 quantile(mtcars$mpg, c(.15, .25, .50, .75, .85))
 ```
 
-### Interquartile Range
+### Interquartile range
 
 * It is the different of the upper quartile and the lower quartile; 
 * It measures how far apart the middle portion of data spreads.
 
 ```{r}
 lower_quartile <- quantile(mtcars$mpg)[[2]]
-upper_quartile <- quantile(mtcars$mpg)[[2]]
-IQR
+upper_quartile <- quantile(mtcars$mpg)[[4]]
+
+# calculate manually
+upper_quartile - lower_quartile
+IQR(mtcars$mpg) == upper_quartile - lower_quartile
+```
+
+### Box plot
+
+Box plot is a graphical representation of quartiles
+
+```{r}
+library(ggplot2)
+ggplot(mtcars, aes(x=factor(0), mpg)) +
+  geom_boxplot()
 ```

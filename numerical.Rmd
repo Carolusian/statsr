@@ -35,4 +35,19 @@ sort(mtcars$mpg) %>%
 
 ### Percentile
 
-n^th^
+n^th^ percentile of an observation varible is the value cut off the first n percent of the data when it is sorted. Quartile is a special form of percentile.
+
+```{r}
+quantile(mtcars$mpg, c(.15, .25, .50, .75, .85))
+```
+
+### Interquartile Range
+
+* It is the different of the upper quartile and the lower quartile; 
+* It measures how far apart the middle portion of data spreads.
+
+```{r}
+lower_quartile <- quantile(mtcars$mpg)[[2]]
+upper_quartile <- quantile(mtcars$mpg)[[2]]
+IQR
+```

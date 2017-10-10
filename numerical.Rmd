@@ -1,8 +1,10 @@
 ---
 title: "Numerical Measures"
-author: Carolusian <https://github.com/carolusian>
-date: Sep 28, 2017
-output: html_notebook
+author: "Carolusian <https://github.com/carolusian>"
+date: "Sep 28, 2017"
+output:
+  html_document: default
+  html_notebook: default
 ---
 
 ## Explain different numerical measures
@@ -35,7 +37,7 @@ sort(mtcars$mpg) %>%
 
 ### Percentile
 
-n^th^ percentile of an observation varible is the value cut off the first n percent of the data when it is sorted. Quartile is a special form of percentile.
+nth percentile of an observation varible is the value cut off the first n percent of the data when it is sorted. Quartile is a special form of percentile.
 
 ```{r}
 quantile(mtcars$mpg, c(.15, .25, .50, .75, .85))
@@ -43,8 +45,8 @@ quantile(mtcars$mpg, c(.15, .25, .50, .75, .85))
 
 ### Interquartile range
 
-* It is the different of the upper quartile and the lower quartile; 
-* It measures how far apart the middle portion of data spreads.
+It is the different of the upper quartile and the lower quartile; 
+It measures how far apart the middle portion of data spreads.
 
 ```{r}
 lower_quartile <- quantile(mtcars$mpg)[[2]]
@@ -67,5 +69,21 @@ ggplot(mtcars, aes(x=factor(0), mpg)) +
 
 ### Variance & Standard Deviation 
 
+$s^2 = \frac{1}{n-1}\sum_{i=1}^n(x_i-\bar x)$
+
+It calculates the disperse the data points vary from the mean
+
+n-1 calculates the unbiased sample variance. When divid by smaller number, you get a larger value. This will correct the bias when you choose a sample underestimate the $\bar x$
+
+The standard deviation of an observation variable is the square root of its variance
+
 ```{r}
+mtcars$mpg
+mean(mtcars$mpg)
+
+# manual calculation of unbiased sample variance
+var_mpg <- sum((mtcars$mpg - mean(mtcars$mpg))^2) / (length(mtcars$mpg) - 1)
+var_mpg == var(mtcars$mpg)
+
+sqrt(var_mpg) == sd(mtcars$mpg)
 ```

@@ -1,0 +1,20 @@
+---
+title: "ISLR Notes"
+output: html_notebook
+---
+
+## Linear Regression vs. Logistic Regression
+
+### Linear function
+$Y = β_0 + β_1X + ε$
+
+### Logistic function
+$p(X) = \frac{e^{{β_0}+{β_1}X}}{1 + e^{{β_0}+{β_1}X}}$
+
+$\frac{p(X)}{1-p(X)} = e^{{β_0}+{β_1}X}$
+
+$log(\frac{p(X)}{1-p(X)}) = β_0+β_1X$
+
+### Estimation of Coefficients 
+
+* Linear Regression uses least squares, Logistic Regression uses maximum likelihood

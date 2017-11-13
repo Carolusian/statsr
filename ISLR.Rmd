@@ -23,3 +23,18 @@ $log(\frac{p(X)}{1-p(X)}) = β_0+β_1X$
 ### Estimation of Coefficients 
 
 * Linear Regression uses least squares, Logistic Regression uses maximum likelihood
+
+
+### Linear Regression: accuracy of coefficients:
+
+- RSS (residual sum of squares): $RSS = e^2_1 + e^2_2 + ... + e^2_n$ Least Squares is used to minimize RSS
+- SE (standard error): $SE(\hat{μ}) = \frac{σ^2}{n}$ How accurate is the sample mean $\hat{μ}$, the same rationale applies to $\hat{β}_0$ and $\hat{β}_1$
+- Confidence intervals: [$\hat{β}_1 - 2*SE(\hat{β}_1)$, $\hat{β}_1 + 2*SE(\hat{β}_1)$]
+- t-statistics: $t = \frac{\hat{β}_1 - 0}{SE(\hat{β}_1)}$ Measures the number of standard deviations that $\hat{β}_1$ is away from 0
+
+### Linear Regression: accuracy of model:
+
+- RSE (residual standard error): $RSE = \sqrt{\frac{RSS}{n-2}}$ Average amount (lack of fit) that the response will deviate from the true regression line
+- TSS (total sum of squares): $TSS = \sum{(y_i - \bar{y})^2}$ Total variance in response (amount of variability) before the regression is performance
+- R2 Statistic (R square):  $R^2 = \frac{TSS - RSS}{TSS}$ close to 1 indicates that a large proportion of the variability in the response is explained, similar to correlation
+- F-statistic: $F = \frac{(TSS - RSS)/p}{RSS/(n - p - 1)}$ Test the H0 that all coefficients are zero. If F close to 1, no relationship between Xs and Y; If F larger than 1, otherwise.

@@ -32,9 +32,21 @@ $log(\frac{p(X)}{1-p(X)}) = β_0+β_1X$
 - Confidence intervals: [$\hat{β}_1 - 2*SE(\hat{β}_1)$, $\hat{β}_1 + 2*SE(\hat{β}_1)$]
 - t-statistics: $t = \frac{\hat{β}_1 - 0}{SE(\hat{β}_1)}$ Measures the number of standard deviations that $\hat{β}_1$ is away from 0
 - F-statistic: $F = \frac{(TSS - RSS)/p}{RSS/(n - p - 1)}$ Test the H0 that all coefficients (multiple predictors) are zero. If F close to 1, no relationship between Xs and Y; If F larger than 1, otherwise.
+- P-value: a small `P-value` is an indication of impossibility (about existence of observated relationship when there is no actual real relationship between `x` and `y`, so there must be some real relationship between `x` and `y`) (page-81)
 
 ### Linear Regression: accuracy of model:
 
 - RSE (residual standard error): $RSE = \sqrt{\frac{RSS}{n-2}}$ Average amount (lack of fit) that the response will deviate from the true regression line
 - TSS (total sum of squares): $TSS = \sum{(y_i - \bar{y})^2}$ Total variance in response (amount of variability) before the regression is performance
-- R2 Statistic (R square):  $R^2 = \frac{TSS - RSS}{TSS}$ close to 1 indicates that a large proportion of the variability in the response is explained, similar to correlation
+- R2 Statistic (R square):  $R^2 = \frac{TSS - RSS}{TSS} = 1 - \frac{RSS}{TSS}$ close to 1 indicates that a large proportion of the variability in the response is explained, similar to correlation (page-84)
+
+### Questions to answer in multiple linear regression (page-89)
+
+1. Is at least one of the predictors userful in predicting the response?
+2. Do all the predictors help to explain Y, or only a subset useful?
+3. How well does the model fit the data?
+4. Given predictor values, what should we predict?
+
+
+
+

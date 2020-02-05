@@ -71,7 +71,7 @@ ggplot(mtcars, aes(x=factor(0), mpg)) +
 
 $s^2 = \frac{1}{n-1}\sum_{i=1}^n(x_i-\bar x)$
 
-It calculates the disperse the data points vary from the mean
+**Dispersion**: It calculates the disperse the data points vary from the mean
 
 n-1 calculates the unbiased sample variance. When divid by smaller number, you get a larger value. This will correct the bias when you choose a sample underestimate the $\bar x$
 
@@ -86,4 +86,20 @@ var_mpg <- sum((mtcars$mpg - mean(mtcars$mpg))^2) / (length(mtcars$mpg) - 1)
 var_mpg == var(mtcars$mpg)
 
 sqrt(var_mpg) == sd(mtcars$mpg)
+```
+
+### z-score
+
+**z-score** measures how many standard deviation away from the mean of a particular data point. It is usually used to normalization numerical data values.
+
+$z=\frac{x - \bar x}{\sigma}$
+
+* $\bar x$: mean
+* $\sigma$: standard deviation 
+
+```{r}
+nums <- rnorm(20, 0, 10)
+hist(nums)
+z_score = (nums - mean(nums)) / sd(nums)
+scale(nums)
 ```

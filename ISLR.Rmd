@@ -14,11 +14,14 @@ output: html_notebook
 $Y = β_0 + β_1X + ε$
 
 ### Logistic function
+
 $p(X) = \frac{e^{{β_0}+{β_1}X}}{1 + e^{{β_0}+{β_1}X}}$
 
 $\frac{p(X)}{1-p(X)} = e^{{β_0}+{β_1}X}$
 
 $log(\frac{p(X)}{1-p(X)}) = β_0+β_1X$
+
+* `?glm` for binomial explanation
 
 ### Estimation of Coefficients 
 

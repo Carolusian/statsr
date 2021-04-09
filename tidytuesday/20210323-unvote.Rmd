@@ -1,0 +1,82 @@
+---
+title: "20210323-unvote.Rmd"
+author: "Charlie Chen"
+date: "`r Sys.Date()`"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(tidymodels)
+library(skimr)
+```
+
+## Explore data
+
+```{r}
+unvotes <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-03-23/unvotes.csv")
+issues <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-03-23/issues.csv")
+rollcalls <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-03-23/roll_calls.csv")
+
+df_unvotes <- 
+  unvotes %>%
+  select(country, rcid, vote) %>%
+  mutate(vote = factor(vote, levels = c("no", "abstain", "yes")),
+         vote = as.numeric(vote) - 2) %>%
+  pivot_wider(names_from = "rcid", values_from = "vote", values_fill = 0)
+```
+
+## Reduce dimension
+
+```{r}
+pca_rec <- recipe(~., data = df_unvotes) %>%
+  update_role(country, new_role = "id") %>%
+  step_normalize(all_predictors()) %>%
+  step_pca(all_predictors())
+
+pca_prep <- prep(pca_rec)
+pca_baked <- bake(pca_prep, new_data = NULL)
+
+comp <-
+  tidy(pca_prep, 2) %>%
+  filter(component %in% paste0("PC", 1:4))
+```
+
+## Viz
+
+```{r}
+ggplot(pca_baked, aes(PC1, PC2, label = country)) +
+  geom_point(color = "midnightblue", alpha = 0.7,  size= 2) +
+  geom_text(check_overlap = TRUE, hjust = "inward")
+```
+
+## UMAP
+
+### Dimension reduction
+
+```{r}
+library(embed)
+
+umap_rec <- recipe(~., data = df_unvotes) %>%
+  update_role(country, new_role = "id") %>%
+  step_normalize(all_predictors()) %>%
+  step_umap(all_predictors())
+
+umap_prep <- prep(umap_rec)
+umap_baked <- bake(umap_prep, new_data = NULL) %>%
+  rename(PC1 = umap_1, PC2 = umap_2)
+
+library(umap)
+umap_unvotes <- umap(df_unvotes %>% select(-country))
+umap_unvotes$layout[,1]
+```
+
+### Viz
+
+```{r}
+ggplot(umap_baked, aes(PC1, PC2, label = country)) +
+  geom_point(color = "midnightblue", alpha = 0.7,  size= 2) +
+  geom_text(check_overlap = TRUE, hjust = "inward")
+```

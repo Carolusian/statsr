@@ -1,0 +1,45 @@
+---
+title: "Study Note of TIDY MODELING WITH R"
+output:
+---
+
+## My own overview 
+
+- The basics chapters for this book: 1 - 9
+  - easy to understand;
+  - worth practice a lot
+  - worth review multiple quickly for multiple times
+- The advanced chapters for effective modeling: 10-14 
+  - need deep understanding
+  - worth read slowly in depth for multiple times
+  - can be combined with ISLR and APM
+
+## Feature Engineering with Recipies
+
+- `recipes` package: **specification** of the steps for pre-processing
+- a recipe object defines the steps without immediately executing them
+- `all_nominal`: captures all columns which are factor or character in nature
+- advantages: broader preprocessing choice; compact syntax; recycled for many models; decoupled; OOP as an object
+- three phases: `recipe` -> `prep` (calculate statistics) -> `bake`
+- interaction effect: involve two or more predictors, encoded as there product
+- main effect: the original two predictors
+
+## Fitting moodels with Parsnip
+
+- `parsnip`: fluent and standardized interface for different models
+- TODO
+
+## A Model Workflow
+
+- `workflow`: bind preprocessing and modeling objects together 
+- TODO
+
+## Judging model effectiveness
+
+- `yardstick`: produce performance metrics with consistent interfaces
+- `regression metrics` and `classification metrics`
+
+## Resampling for evaluating performance
+
+- `rsample`
+- `tune`

@@ -1,0 +1,22 @@
+---
+title: "Measles Vaccination Rate"
+output: 
+---
+
+```{r}
+library(tidyverse)
+library(skimr)
+
+measles <- 
+  read_csv('https://github.com/rfordatascience/tidytuesday/raw/master/data/2020/2020-02-25/measles.csv') %>%
+  filter(mmr > 0) %>%
+  transmute(state,
+            mmr_threshold = if_else(mmr > 95, "Above", "Below")) %>%
+  mutate_if(is.character, factor)
+
+measles %>%
+  group_by(state) %>%
+  summarise(mmr = mean(mmr_threshold == "Above")) %>%
+  arrange(-mmr)
+```
+

@@ -1,0 +1,218 @@
+---
+title: "The Titanic Competition on Kaggle"
+output: 
+---
+
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(pacman)
+library(devtools)
+
+p_load(jsonlite)
+p_load(janitor)
+p_load(corrr)
+p_load(skimr)
+
+install_github("mkearney/kaggler")
+
+source("common.R")
+```
+
+```{r}
+datasets_id = "titanic"
+user <- fromJSON("~/.kaggle/kaggle.json", flatten = TRUE)
+kgl_auth(username = user$username, key = user$key)
+
+datasets <- 
+  kaggler::kgl_competitions_data_list(datasets_id) %>%
+  janitor::clean_names()
+
+train_df <- 
+  kgl_dataset(ref = datasets_id, file_name = datasets[3, ]$name_nullable, type = "competition")
+
+test_df <-
+  kgl_dataset(ref = datasets_id, file_name = datasets[1, ]$name_nullable, type = "competition")
+
+sample_sub <-
+  kgl_dataset(ref = datasets_id, file_name = datasets[2, ]$name_nullable, type = "competition")
+```
+
+## Let us have a rough idea of how the data looks like
+
+```{r}
+pillar::glimpse(train_df)
+pillar::dim_desc(train_df)
+train_df %>%
+  select(Pclass, Age, SibSp, Survived) %>%
+  corrr::correlate() %>%
+  rplot()
+
+skimr::skim(train_df)
+```
+
+## Since `cabin` has so many missing data, lets check the distribution
+
+- Seems like `NA` value means no cabin
+- We just need to the cabin Letter without the numbers
+
+```{r}
+train_df %>%
+  distinct(Cabin)
+
+train_df %>%
+  mutate(Cabin = if_else(is.na(Cabin), "NA", str_sub(Cabin, 1, 1))) %>%
+  group_by(Cabin) %>%
+  summarise(n = n(), total = sum(Survived)) %>%
+  mutate(pct = total / n)
+```
+
+## Let have a look at the names
+
+- Name field contains title information 
+- We can extract the information like, `Mr`, `Miss`, `Master`, `Mrs`, `Other`
+
+```{r}
+train_df %>%
+  separate(Name, sep = "[,.]", into = c(NA, "Title", NA)) %>%
+  mutate(Title = fct_lump_n(Title, 4))
+```
+
+
+## Let do some feature Engineering
+
+```{r}
+preprocess <- function(tbl) {
+  tbl %>%
+    separate(Name, sep = "[,.]", into = c(NA, "Name", NA)) %>%
+    transmute(
+      Pclass,
+      Name = fct_lump_n(Name, 4),
+      Female = if_else(Sex == 'female', 1, 0),
+      Age,
+      Family = SibSp + Parch,
+      Fare,
+      Cabin = if_else(is.na(Cabin), "N", str_sub(Cabin, 1, 1)),
+      Embarked,
+      Survived = factor(Survived)
+    )
+}
+
+preprocess_test <- function(tbl) {
+  tbl %>%
+    separate(Name, sep = "[,.]", into = c(NA, "Name", NA)) %>%
+    transmute(
+      Pclass,
+      Name = fct_lump_n(Name, 4),
+      Female = if_else(Sex == 'female', 1, 0),
+      Age,
+      Family = SibSp + Parch,
+      Fare,
+      Cabin = if_else(is.na(Cabin), "N", str_sub(Cabin, 1, 1)),
+      Embarked
+    )
+}
+
+preprocessed <- 
+  train_df %>%
+  preprocess()
+```
+
+## Lets do further exploration analysis before modeling
+
+- More female survived
+- Class 3 have the most people died
+- More family members, more likely ot survive
+- Embarked on which port seems less important
+
+```{r}
+preprocessed %>%
+  ggplot(aes(Pclass, Survived)) + 
+  geom_jitter()
+
+preprocessed %>%
+  ggplot(aes(Age, Survived, color = as_factor(Female))) + 
+  geom_point() +
+  scale_color_brewer(palette = "Dark2")
+
+preprocessed %>%
+  ggplot(aes(Family, Survived)) +
+  geom_jitter()
+
+preprocessed %>%
+  ggplot(aes(Embarked, Survived)) +
+  geom_jitter()
+
+# proportional stacked barchart
+train_df %>%
+  mutate(Survived = if_else(Survived == 1, "Yes", "No")) %>%
+  chisq_test(Survived ~ Sex)
+
+train_df %>%
+  transmute(Sex, Pclass, Survived) %>%
+  ggplot(aes(Pclass, Survived, fill=Sex)) + 
+  geom_col(position="fill") +
+  scale_y_continuous(labels = scales::percent)
+```
+
+## Modeling time!!
+
+```{r}
+set.seed(222)
+
+data_split <- initial_split(preprocessed, prop = 3/4)
+train_data <- training(data_split)
+test_data <- testing(data_split)
+
+titanic_folds <- vfold_cv(train_data, v = 5)
+titanic_folds$splits[[1]] %>% analysis() %>% dim()
+
+titanic_rec <-
+  recipe(Survived ~ ., data = train_data) %>%
+  step_impute_median(Age) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_zv(all_predictors())
+
+titanic_prep <- prep(titanic_rec, retain = TRUE)
+titanic_prep
+
+titanic_mod <- 
+  logistic_reg() %>%
+  set_engine("glm")
+
+titanic_wf <-
+  workflow() %>%
+  add_recipe(titanic_rec) %>%
+  add_model(titanic_mod) 
+
+titanic_fit <- 
+  titanic_wf %>%
+  fit(data = train_data)
+
+titanic_fit %>%
+  extract_fit_parsnip() %>%
+  tidy()
+
+predict(titanic_fit, test_data)
+titanic_aug <-
+  augment(titanic_fit, test_data) 
+
+titanic_aug %>%
+  roc_curve(truth = Survived, .pred_0) %>%
+  autoplot()
+
+titanic_aug %>%
+  roc_auc(truth = Survived, .pred_0) 
+```
+## Prepare for submission
+
+```{r}
+bind_cols(
+  test_df %>% select(PassengerId),
+  predict(titanic_fit, test_df %>% preprocess_test())
+)
+```
+
+
+

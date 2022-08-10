@@ -21,6 +21,7 @@ output:
 - `all_nominal`: captures all columns which are factor or character in nature
 - advantages: broader preprocessing choice; compact syntax; recycled for many models; decoupled; OOP as an object
 - three phases: `recipe` -> `prep` (calculate statistics) -> `bake`
+- `juice()` can be used to check the prep result in a dataframe
 - interaction effect: involve two or more predictors, encoded as there product
 - main effect: the original two predictors
 

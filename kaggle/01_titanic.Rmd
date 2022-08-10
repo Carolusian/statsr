@@ -23,20 +23,20 @@ source("common.R")
 ```{r}
 datasets_id = "titanic"
 user <- fromJSON("~/.kaggle/kaggle.json", flatten = TRUE)
-kgl_auth(username = user$username, key = user$key)
+kaggler::kgl_auth(username = user$username, key = user$key)
 
 datasets <- 
   kaggler::kgl_competitions_data_list(datasets_id) %>%
   janitor::clean_names()
 
 train_df <- 
-  kgl_dataset(ref = datasets_id, file_name = datasets[3, ]$name_nullable, type = "competition")
+  kgl_dataset(ref = datasets_id, file_name = datasets[2, ]$name_nullable, type = "competition")
 
 test_df <-
   kgl_dataset(ref = datasets_id, file_name = datasets[1, ]$name_nullable, type = "competition")
 
 sample_sub <-
-  kgl_dataset(ref = datasets_id, file_name = datasets[2, ]$name_nullable, type = "competition")
+  kgl_dataset(ref = datasets_id, file_name = datasets[3, ]$name_nullable, type = "competition")
 ```
 
 ## Let us have a rough idea of how the data looks like
@@ -165,9 +165,6 @@ data_split <- initial_split(preprocessed, prop = 3/4)
 train_data <- training(data_split)
 test_data <- testing(data_split)
 
-titanic_folds <- vfold_cv(train_data, v = 5)
-titanic_folds$splits[[1]] %>% analysis() %>% dim()
-
 titanic_rec <-
   recipe(Survived ~ ., data = train_data) %>%
   step_impute_median(Age) %>%
@@ -175,7 +172,7 @@ titanic_rec <-
   step_zv(all_predictors())
 
 titanic_prep <- prep(titanic_rec, retain = TRUE)
-titanic_prep
+titanic_prep %>% juice()
 
 titanic_mod <- 
   logistic_reg() %>%
@@ -205,13 +202,183 @@ titanic_aug %>%
 titanic_aug %>%
   roc_auc(truth = Survived, .pred_0) 
 ```
+
+## Do the same with resampling
+
+```{r}
+p_load(rsample)
+
+folds <- vfold_cv(train_data)
+folds$splits[[1]] %>% analysis()
+  
+ctrl <- control_resamples(save_pred = TRUE)
+titanic_rs <- fit_resamples(titanic_mod, titanic_rec, folds, control = ctrl)
+collect_metrics(titanic_rs)
+collect_metrics(titanic_rs, summarize = FALSE)
+conf_mat_resampled(titanic_rs, tidy = FALSE) %>%
+  autoplot()
+collect_predictions(titanic_rs) %>%
+  group_by(id) %>%
+  yardstick::roc_curve(truth = Survived, .pred_0) %>%
+  autoplot()
+collect_predictions(titanic_rs) %>%
+  group_by(id) %>%
+  yardstick::roc_curve(truth = Survived, .pred_0) %>%
+  autoplot()
+```
+
+## Tune a penalized logistic regression model
+
+```{r}
+p_load(glmnet)
+
+lr_mod <- logistic_reg(engine = "glmnet", penalty = tune(), mixture = 1)
+lr_workflow <- titanic_wf %>%
+  update_model(lr_mod)
+lr_reg_grid <- tibble(penalty = 10^seq(-4, -1, length.out = 30))
+lr_res <- lr_workflow %>%
+  tune_grid(folds, grid = lr_reg_grid, control = control_grid(save_pred = TRUE))
+collect_metrics(lr_res) %>%
+  ggplot(aes(penalty, mean)) +
+  geom_point() +
+  geom_line() + 
+  geom_text(aes(label = round(penalty, 4)), vjust=1.5, hjust = 1.5, check_overlap = TRUE) + 
+  facet_wrap(~ .metric, ncol = 1) +
+  scale_x_log10(labels = scales::label_number())
+
+show_best(lr_res, "roc_auc", n = 15) %>%
+  arrange()
+lr_best <- lr_res %>%
+  select_best("roc_auc")
+lr_best <- lr_res %>%
+  collect_metrics() %>%
+  arrange(penalty) %>%
+  slice(15)
+lr_res %>%
+  collect_predictions(parameters = lr_best) %>%
+  roc_curve(truth = Survived, .pred_0) %>%
+  autoplot()
+lr_res %>%
+  collect_predictions(parameters = lr_best) %>%
+  roc_auc(truth = Survived, .pred_0) 
+lr_roc <- lr_res %>%
+  collect_predictions(parameters = lr_best) %>%
+  roc_curve(truth = Survived, .pred_0) %>%
+  mutate(model = "Logistic Regression")
+```
+
+
+## Try models beyond logistic regression
+
+### LDA
+
+```{r}
+p_load(discrim)
+
+lda_mod <- discrim_linear() %>%
+  set_mode("classification") %>%
+  set_engine("MASS", importance = "impurity") 
+lda_mod
+
+lda_wf <- workflow() %>%
+  add_recipe(titanic_rec) %>%
+  add_model(lda_mod)
+
+lda_fit <- fit(lda_wf, data = train_data)
+lda_fit %>%
+  augment(new_data = test_data) %>%
+  roc_curve(truth = Survived, .pred_0) %>%
+  autoplot()
+lda_fit %>%
+  augment(new_data = test_data) %>%
+  roc_auc(truth = Survived, .pred_0) 
+lda_roc <- lda_fit %>%
+  augment(new_data = test_data) %>%
+  roc_curve(truth = Survived, .pred_0) %>%
+  mutate(model = "LDA")
+```
+### Random Forest
+
+```{r}
+p_load(ranger)
+
+parallel::detectCores()
+
+folds <- vfold_cv(train_data, strata = Cabin)
+folds$splits[[1]] %>% analysis()
+
+rf_rec <- recipe(Survived ~ Pclass + Name + Female + Age + Family + Fare, data = train_data) %>%
+  step_impute_median(Age, Fare) %>%
+  step_zv(all_predictors())
+
+rf_mod <- rand_forest(mode = "classification", mtry = tune(), min_n = tune(), trees = 500) %>%
+  set_engine("ranger", num.threads = parallel::detectCores())
+rf_wf <- workflow() %>%
+  add_recipe(rf_rec) %>%
+  add_model(rf_mod) 
+
+rf_res <- rf_wf %>%
+  tune_grid(folds, grid = 25, control = control_grid(save_pred = TRUE))
+
+collect_metrics(rf_res)
+collect_metrics(rf_res) %>%
+  ggplot(aes(min_n, mean)) +
+  geom_point() +
+  geom_line() + 
+  facet_wrap(~ .metric)
+
+rf_best <- select_best(rf_res, metric = "roc_auc")
+rf_best
+collect_predictions(rf_res, parameters = rf_best) %>%
+  roc_curve(truth = Survived, .pred_0) %>%
+  autoplot()
+
+collect_predictions(rf_res, parameters = rf_best) %>%
+  roc_auc(truth = Survived, .pred_0)
+
+rf_roc <- collect_predictions(rf_res, parameters = rf_best) %>%
+  roc_curve(truth = Survived, .pred_0) %>%
+  mutate(model = "Random Forest")
+```
+
+## Compare different models and last fit
+
+```{r}
+bind_rows(lr_roc, lda_roc, rf_roc) %>%
+  ggplot(aes(1 - specificity, sensitivity, col = model)) +
+  geom_path(lwd = 1) + 
+  geom_abline(lty = 3) +
+  coord_equal() +
+  scale_color_viridis_d(option = "plasma", end = .6)
+
+last_rf_mod <- rand_forest(mode = "classification", mtry = 1, min_n = 26, trees = 500) %>%
+  set_engine("ranger", num.threads = parallel::detectCores(), importance = "impurity")
+
+last_rf_wf <- 
+  rf_wf %>% 
+  update_model(last_rf_mod)
+
+last_rf_fit <- fit(last_rf_wf, preprocessed)
+last_rf_fit %>%
+  extract_fit_parsnip() %>%
+  vip(n = 10)
+```
+
+
+
 ## Prepare for submission
 
 ```{r}
+titanic_fit <- last_rf_fit
+titanic_prep <- prep(rf_rec, data = test_df %>% preprocess_test())
+test <- bake(titanic_prep, new_data = test_df %>% preprocess_test())
+
 bind_cols(
   test_df %>% select(PassengerId),
-  predict(titanic_fit, test_df %>% preprocess_test())
-)
+  predict(titanic_fit, test)
+) %>%
+  rename(Survived = .pred_class) %>%
+  write_csv("data/01_titanic_submission.csv")
 ```
 
 

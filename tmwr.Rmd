@@ -8,39 +8,85 @@ output:
 - The basics chapters for this book: 1 - 9
   - easy to understand;
   - worth practice a lot
-  - worth review multiple quickly for multiple times
+  - worth review quickly for multiple times
 - The advanced chapters for effective modeling: 10-14 
   - need deep understanding
   - worth read slowly in depth for multiple times
   - can be combined with ISLR and APM
 
-## Feature Engineering with Recipies
+## Feature Engineering with Recipies (Important)
 
+- transformation and encodings to best represent characteristics and make them easier for model to use
 - `recipes` package: **specification** of the steps for pre-processing
 - a recipe object defines the steps without immediately executing them
 - `all_nominal`: captures all columns which are factor or character in nature
+- `all_outcomes`, `all_numeric_predictors`, `all_predictors`
 - advantages: broader preprocessing choice; compact syntax; recycled for many models; decoupled; OOP as an object
 - three phases: `recipe` -> `prep` (calculate statistics) -> `bake`
 - `juice()` can be used to check the prep result in a dataframe
 - interaction effect: involve two or more predictors, encoded as there product
+  - one way to detect interaction is to check the slope of given different categories
+  - if no interaction, then the slope shall be roughly the same (even the intercept may differ)
+  - `step_interact`
 - main effect: the original two predictors
+- dataframe vs numeric design/model matrix
+- `step_other`: update infrequent values to "other" category
+- `step_ns`: natural spline line
+- `step_pca`: feature extraction
+  - need to be on same scale, e.g. size of first floor vs gross live area
+  - otherwise, need to normalize to the same scale
+  - if several predictors are highly correlated, then can do it
+- `step_mutate`: e.g. the `bedroom / bathroom` ratio
+- `update_role`: to remove from predictor, and keep it to facilitate investigation
 
 ## Fitting moodels with Parsnip
 
 - `parsnip`: fluent and standardized interface for different models
+- `parsnip_addin()` to show an UI to choose model mode and generate code
+- `translate()` convert to package/engine's syntax
+- `predict()` as a prediction `type` argument
 - TODO
 
 ## A Model Workflow
 
+- handle's the question: where does the model begin and end?
 - `workflow`: bind preprocessing and modeling objects together 
+- `workflow_set`:
+  - evaluate a variety of different models
+  - sequential testing of the same model with different predictors
+  - `extract_workflow` to extract a single workflow from the set
+  - use `purrr::map` to fit all workflows in one shot
 - TODO
 
 ## Judging model effectiveness
 
 - `yardstick`: produce performance metrics with consistent interfaces
-- `regression metrics` and `classification metrics`
+- `regression metrics` and `classification metrics` (binary / multiclass)
+- `regression metrics`:
+  - `mae`: mean average error
+  - `rmse` and `rsq`: measures accuracy and correlation
+- `binary classification metrics`:
+  - `conf_mat`, `accuracy`, `mcc`, `f_meas`
+- `multiclass classification metrics`:
+  - `macro`: macro-averaging
+  - `macro_weighted`: macro-weighted averaging
+  - `micro`: micro averaging 
+- `coord_obs_pred()`: Scale and size the x- and y-axis uniformly
 
 ## Resampling for evaluating performance
 
 - `rsample`
 - `tune`
+
+## Dimentionality Reduction
+
+## Encoding Categorical Data
+
+- `embeded` and `textrecipes`
+- `step_ordinalscore`
+- can use outcome to encode categorical predictors, e.g. `step_lencode_glm`
+
+## Explaining Models and Predictions (Important)
+
+- `lime`, `vip` and `DALEX(tra)`
+- A feature is more important: if permuting them results in higher RMSE

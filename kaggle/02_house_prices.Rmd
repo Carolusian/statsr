@@ -1,0 +1,179 @@
+---
+title: "House Prices - Advanced Regression Techniques"
+output: 
+---
+
+
+```{r}
+library(pacman)
+library(tidyverse)
+library(tidymodels)
+library(devtools)
+
+install_github("mkearney/kaggler")
+source("common.R")
+
+tidymodels_prefer()
+```
+
+## Get the datasets
+
+```{r}
+datasets_id <- "house-prices-advanced-regression-techniques"
+user <- jsonlite::fromJSON("~/.kaggle/kaggle.json")
+kaggler::kgl_auth(username = user$username, key = user$key)
+
+datasets <- kaggler::kgl_competitions_data_list(datasets_id) %>%
+  janitor::clean_names()
+datasets
+
+train_df <- kgl_dataset(ref = datasets_id, file_name = "train.csv", type = "competition")
+test_df <- kgl_dataset(ref = datasets_id, file_name = "test.csv", type = "competition")
+sample_df <- kgl_dataset(ref = datasets_id, file_name = "sample_submission.csv", type = "competition")
+data_desc <- kgl_dataset(ref = datasets_id, file_name = "data_description.txt", type = "competition")
+```
+## Let us explore the data
+
+### Numeric predictors
+
+- `SalePrice` shall be log transformed
+- There is obviously linear correlation between `log(SalePrice)` and `log(GrLiveArea)` 
+- There is a linear correlation between `log(SalePrice)` and `YearBuilt`
+- There is a linear correlation between `log(SalePrice)` and `OverallQual`
+- `XxxxSF` and `XxxxArea` variables: 
+  - `TotalBsmtSF` and `1stFlrSF` is highly correlated with `Log(SalePrice)`
+  - `BsmtUnfSF` and `2ndFlrSF` is also correlated
+  - `GrLiveArea` and `2ndFlrSF` is also correlated
+  - Others is relatively less correlated, can use PCA to reduce the dimensionality
+
+
+```{r}
+p_load(plotly)
+
+train_df %>% 
+  skimr::skim()
+
+train_df %>% 
+  select_if(is.numeric) %>% 
+  corrr::correlate() %>%
+  select(term, SalePrice) %>%
+  arrange(desc(SalePrice)) %>%
+  ggplot(aes(fct_reorder(term, SalePrice), SalePrice)) +
+  geom_col() +
+  coord_flip()
+
+# Too many variables
+train_df %>% 
+  select_if(is.numeric) %>%
+  corrr::correlate() %>% 
+  corrr::rplot() + 
+  scale_x_discrete(guide = guide_axis(angle = 90))
+
+train_df %>%
+  select_if(is.numeric) %>%
+  select(ends_with("SF") | ends_with("Area")) %>%
+  corrr::correlate() %>%
+  corrr::rplot() +
+  scale_x_discrete(guide = guide_axis(angle = 90))
+
+# See if there is a strong correlation between "SF" variables and SalePrice
+train_df %>%
+  select_if(is.numeric) %>%
+  select(Id, SalePrice, ends_with("SF")) %>%
+  pivot_longer(cols = ends_with("SF")) %>%
+  ggplot(aes(value, SalePrice)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  facet_wrap(~ name, ncol = 2) +
+  scale_y_log10(labels = scales::number)
+  
+train_df %>%
+  ggplot(aes(YearBuilt, SalePrice)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  scale_y_log10(labels = scales::number) 
+
+# strong linear correlation
+train_df %>%
+  ggplot(aes(GrLivArea, SalePrice)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) + 
+  scale_y_log10(labels = scales::number) +
+  scale_x_log10(labels = scales::number) 
+
+train_df %>%
+  ggplot(aes(LotArea, SalePrice)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  scale_y_log10(labels = scales::number) +
+  scale_x_log10(labels = scales::number) 
+
+train_df %>%
+  ggplot(aes(OverallQual, SalePrice)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  scale_y_log10(labels = scales::number) +
+  scale_x_log10(labels = scales::number) 
+
+train_df %>%
+  ggplot(aes(GarageCars, GarageArea)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) 
+
+# Use a 3d scatter plot to check relationship between 4 variables
+train_df %>%
+  plot_ly(x=~OverallQual, y=~GrLivArea, z=~log10(SalePrice), 
+          type="scatter3d", color = ~YearBuilt) 
+
+# Log scale worker better in this case as the original scale is right-skewed
+# Log transformation avoids undue influence of expensive house prices
+train_df %>%
+  ggplot(aes(SalePrice)) +
+  geom_histogram() +
+  scale_x_log10(labels = scales::number)
+```
+
+### Categorical predictors
+
+- `Neighborhood`
+- `Condition2`
+- `ExterQual`
+- `BsmtQual`
+- `GaragQual`
+- `KitchenQual`
+- `CentralAir`
+- `Electrical`
+- `Alley`
+
+```{r}
+train_df %>% 
+  skimr::skim()
+
+train_df %>%
+  ggplot(aes(SalePrice, fct_reorder(Neighborhood, SalePrice))) +
+  geom_boxplot() +
+  scale_x_log10()
+
+train_df %>%
+  ggplot(aes(SalePrice, fill = Neighborhood)) +
+  geom_density(alpha = .2) +
+  scale_x_log10()
+
+batch_boxplot <- function (df, col) {
+  df %>% 
+    ggplot(aes_string("SalePrice", fill = col)) +
+    geom_density(alpha = .2) +
+    scale_x_log10()
+}
+
+col_names <- train_df %>%
+  select_if(is.character) %>%
+  colnames() 
+
+plots <- col_names %>%
+  map(~ batch_boxplot(train_df, .))
+
+plots
+```
+
+

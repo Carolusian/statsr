@@ -1,6 +1,10 @@
 ---
 title: "The Titanic Competition on Kaggle"
 output: 
+  html_document:
+    toc: true
+    highlight: zenburn
+    df_print: paged
 ---
 
 
@@ -14,29 +18,32 @@ p_load(jsonlite)
 p_load(janitor)
 p_load(corrr)
 p_load(skimr)
+p_load(vip)
 
-install_github("mkearney/kaggler")
-
-source("common.R")
+# install_github("mkearney/kaggler")
+# source("common.R")
 ```
 
 ```{r}
-datasets_id = "titanic"
-user <- fromJSON("~/.kaggle/kaggle.json", flatten = TRUE)
-kaggler::kgl_auth(username = user$username, key = user$key)
-
-datasets <- 
-  kaggler::kgl_competitions_data_list(datasets_id) %>%
-  janitor::clean_names()
-
-train_df <- 
-  kgl_dataset(ref = datasets_id, file_name = datasets[2, ]$name_nullable, type = "competition")
-
-test_df <-
-  kgl_dataset(ref = datasets_id, file_name = datasets[1, ]$name_nullable, type = "competition")
-
-sample_sub <-
-  kgl_dataset(ref = datasets_id, file_name = datasets[3, ]$name_nullable, type = "competition")
+# datasets_id = "titanic"
+# user <- fromJSON("~/.kaggle/kaggle.json", flatten = TRUE)
+# kaggler::kgl_auth(username = user$username, key = user$key)
+# 
+# datasets <- 
+#   kaggler::kgl_competitions_data_list(datasets_id) %>%
+#   janitor::clean_names()
+# 
+# train_df <- 
+#   kgl_dataset(ref = datasets_id, file_name = "train.csv", type = "competition")
+# 
+# test_df <-
+#   kgl_dataset(ref = datasets_id, file_name = "test.csv", type = "competition")
+# 
+# sample_sub <-
+#   kgl_dataset(ref = datasets_id, file_name = "gender_submission.csv", type = "competition")
+train_df <- read_csv("../input/titanic/train.csv")
+test_df <- read_csv("../input/titanic/test.csv")
+sample_sub <- read_csv("../input/titanic/gender_submission.csv")
 ```
 
 ## Let us have a rough idea of how the data looks like

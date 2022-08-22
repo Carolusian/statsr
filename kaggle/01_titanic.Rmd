@@ -8,7 +8,7 @@ output:
 ---
 
 
-```{r}
+```{r setup}
 library(tidyverse)
 library(tidymodels)
 library(pacman)

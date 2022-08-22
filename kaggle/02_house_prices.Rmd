@@ -1,8 +1,16 @@
 ---
 title: "House Prices - Advanced Regression Techniques"
 output: 
+  html_document:
+    toc: true
+    theme: united
+    df_print: paged
 ---
 
+
+```{r}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
 
 ```{r}
 library(pacman)
@@ -10,8 +18,8 @@ library(tidyverse)
 library(tidymodels)
 library(devtools)
 
-install_github("mkearney/kaggler")
-source("common.R")
+# install_github("mkearney/kaggler")
+# source("common.R")
 
 tidymodels_prefer()
 ```
@@ -19,18 +27,9 @@ tidymodels_prefer()
 ## Get the datasets
 
 ```{r}
-datasets_id <- "house-prices-advanced-regression-techniques"
-user <- jsonlite::fromJSON("~/.kaggle/kaggle.json")
-kaggler::kgl_auth(username = user$username, key = user$key)
-
-datasets <- kaggler::kgl_competitions_data_list(datasets_id) %>%
-  janitor::clean_names()
-datasets
-
-train_df <- kgl_dataset(ref = datasets_id, file_name = "train.csv", type = "competition")
-test_df <- kgl_dataset(ref = datasets_id, file_name = "test.csv", type = "competition")
-sample_df <- kgl_dataset(ref = datasets_id, file_name = "sample_submission.csv", type = "competition")
-data_desc <- kgl_dataset(ref = datasets_id, file_name = "data_description.txt", type = "competition")
+train_df <- read_csv("../input/house-prices-advanced-regression-techniques/train.csv")
+test_df <- read_csv("../input/house-prices-advanced-regression-techniques/test.csv")
+sample_df <- read_csv("../input/house-prices-advanced-regression-techniques/sample_submission.csv")
 ```
 ## Let us explore the data
 
@@ -176,4 +175,319 @@ plots <- col_names %>%
 plots
 ```
 
+
+## Prepare data budget
+
+```{r}
+set.seed(123)
+
+train_trans <- train_df %>%
+  mutate(SalePrice = log10(SalePrice))
+data_split <- initial_split(train_trans, prop = 0.80, strata = SalePrice)
+train_data <- training(data_split)
+heldout_data <- testing(data_split)
+```
+
+## Build a simple linear regression model with the predictors selected
+
+```{r}
+lm_rec <- recipe(SalePrice ~ 
+         GrLivArea + YearBuilt + OverallQual + 
+         TotalBsmtSF + `1stFlrSF` + `2ndFlrSF` + LowQualFinSF + BsmtUnfSF +
+         Neighborhood + Condition2 + `ExterQual` + BsmtQual + GarageQual +
+         KitchenQual + CentralAir,
+       data = train_data) %>%
+  step_log(GrLivArea, base = 10) %>%
+  step_dummy(all_nominal_predictors())
+
+lm_rec %>% prep() %>% juice() %>% skimr::skim()
+lm_mod <- linear_reg()
+lm_wf <- workflow(lm_rec, lm_mod)
+
+folds <- vfold_cv(train_data, v = 5, strata = SalePrice)
+ctrl <- control_resamples(save_pred = TRUE)
+lm_rs <- fit_resamples(lm_wf, folds, control = ctrl)
+lm_rs %>% collect_metrics()
+lm_rs %>%
+  collect_predictions() %>%
+  ggplot(aes(SalePrice, .pred)) +
+  geom_abline() +
+  geom_point() +
+  coord_obs_pred()
+
+lm_rs %>%
+  collect_predictions() %>%
+  mutate(.resid = SalePrice - .pred) %>%
+  ggplot(aes(.resid)) +
+  geom_histogram()
+
+lm_best <- select_best(lm_rs) 
+
+lm_final <- finalize_workflow(lm_wf, lm_best)
+lm_final %>%
+  last_fit(data_split) %>%
+  collect_metrics()
+```
+
+```{r}
+# The prediction for low price house is higher, and lower for higher price houses
+lm_rs %>%
+  collect_predictions() %>%
+  mutate(.resid = SalePrice - .pred) %>%
+  ggplot(aes(SalePrice, .resid)) +
+  geom_point(alpha = 0.5) +
+  geom_hline(yintercept = 0) +
+  geom_smooth(method = "lm")
+```
+
+
+```{r}
+# get RSME
+lm_rs %>%
+  collect_predictions(summarize = TRUE) %>%
+  na.omit() %>%
+  transmute(.pred = 10^.pred, SalePrice = 10^SalePrice, SqError = (.pred - SalePrice)^2) %>%
+  pull(SqError) %>%
+  mean() %>%
+  sqrt()
+```
+
+## Check missing values
+
+- It seems the missing values affects the performance of the linear model
+- So need to have the missing values handled
+
+- `LotFrontage` column is not used, just drop this column
+- `GarageYrBlt` later than `YearBuilt`, can impute with `YearBuilt`
+- `Alley` / `Street` are not useful
+- `MasVnrType` impute with other
+- `MasVnrArea` impute with 0
+- `GarageXXX`: NA means no garage
+- `BasementXXX`: NA means no Basement
+- `Electrical`: can just drop the row
+- `FireplaceQu` impute with other, NA means no fireplace
+- `PoolQC`: NA means no pool
+
+```{r}
+skimr::skim(train_data)
+
+# Alley / Street seems not useful
+train_data %>% 
+  count(Alley, Street) %>%
+  ggplot(aes(Alley, n)) +
+  geom_col()
+
+# Impute missing GarageYrBlt with YearBuilt
+train_data %>%
+  count(GarageYrBlt, YearBuilt) %>%
+  ggplot(aes(GarageYrBlt, YearBuilt)) +
+  geom_jitter() 
+
+train_data %>%
+  count(MasVnrType)
+
+train_data %>%
+  filter(is.na(MasVnrArea)) %>%
+  select(MasVnrArea, MasVnrType)
+  
+train_data %>%
+  filter(is.na(GarageType)) 
+
+train_data %>%
+  count(Electrical, YearBuilt)
+
+train_data %>%
+  count(FireplaceQu)
+
+train_data %>%
+  filter(!is.na(PoolQC))
+
+train_data %>%
+  count(PoolQC, Fence)
+```
+
+- `LotFrontage` column is not used, just drop this column
+- `GarageYrBlt` `NA` means Garage not exist, just drop this column
+- `Alley` / `Street` are not useful
+- `MasVnrType` impute with other
+- `MasVnrArea` impute with 0
+- `GarageXXX`: NA means no garage
+- `BasementXXX`: NA means no Basement
+- `Electrical`: can just drop the row
+- `FireplaceQu` impute with other, NA means no fireplace
+- `PoolQC`: NA means no pool
+
+```{r}
+# let us hanlde missing values here
+handle_missing <- function (df) {
+  df %>%
+    select(-LotFrontage, -Alley, -Street, -GarageYrBlt, -Electrical, -MiscFeature, 
+           -Fence, -Condition2, -RoofMatl, -Heating, -Exterior2nd, -ExterCond, -Functional, 
+           -Utilities, -Exterior1st, -HeatingQC, -SaleType, -MSZoning, -BsmtFinSF1, -BsmtFinSF2, 
+           -BsmtUnfSF, -TotalBsmtSF, -BsmtFullBath, 
+           -BsmtHalfBath, -KitchenQual, -GarageCars, -GarageArea) %>%
+    mutate(MasVnrType = if_else(is.na(MasVnrType), 'None', MasVnrType),
+           MasVnrArea = if_else(is.na(MasVnrArea), 0, MasVnrArea)) %>% 
+    mutate_if(is.character, replace_na, replace = 'None') %>%
+    mutate_at(vars(contains("SalePrice")), ~ log10(.))
+}
+```
+
+## Prepare data budget with missing value handled
+
+```{r}
+set.seed(2022)
+
+train_clean <- handle_missing(train_df)
+test_clean <- handle_missing(test_df)
+
+data_split <- initial_split(train_clean, prop = 0.80, strata = SalePrice)
+train_data <- training(data_split)
+heldout_data <- testing(data_split)
+```
+
+```{r}
+folds <- vfold_cv(train_clean, v = 5, strata = SalePrice)
+```
+
+
+## Try other models like KNN and Random Forest
+
+linear regression have a good performance, but the residuals seems still a bit skrewed. Let us try some other models.
+
+### KNN 
+
+- knn seems not doing good 
+
+```{r}
+p_load(kknn)
+
+knn_rec <- recipe(SalePrice ~ 
+                    GrLivArea + YearBuilt + OverallQual,
+                    data = train_data) %>%
+  step_log(GrLivArea, base = 10) %>%
+  step_normalize(all_numeric_predictors()) 
+knn_mod <- nearest_neighbor(mode = "regression", neighbors = tune(), weight_func = tune())
+
+knn_wf <- workflow() %>%
+  add_recipe(knn_rec) %>%
+  add_model(knn_mod)
+
+knn_param <-
+  knn_wf %>%
+  parameters() %>%
+  update(
+    neighbors = neighbors(c(3, 50)),
+    weight_func = weight_func(values = c("rectangular", "triangular", "epanechnikov", "biweight", "triweight", "cos", "inv"))
+  )
+knn_ctrl <- control_bayes(verbose = TRUE, save_pred = TRUE)
+knn_search <- tune_bayes(knn_wf, folds, initial = 5, iter = 20, param_info = knn_param, control = knn_ctrl)
+
+autoplot(knn_search, type = "performance", metric = "rmse")
+
+collect_metrics(knn_search) %>% 
+  dplyr::filter(.metric == "rmse") %>% 
+  arrange(mean)
+
+collect_predictions(knn_search) %>%
+  mutate(.resid = .pred - SalePrice) %>%
+  ggplot(aes(SalePrice, .resid)) +
+  geom_point()
+```
+### Random Forest
+
+```{r}
+rf_rec <- recipe(SalePrice ~ ., data = train_data) %>%
+  update_role(Id, new_role = "id variable")
+
+rf_mod <- 
+  rand_forest(mode = "regression", engine="ranger", 
+              mtry = tune(), 
+              trees = 1000, 
+              min_n = tune())
+
+rf_wf <- workflow() %>%
+  add_recipe(rf_rec) %>%
+  add_model(rf_mod)
+
+rf_ctrl <- control_grid(save_pred = TRUE)
+rf_rs <- tune_grid(rf_wf, folds, grid = 20, control = rf_ctrl)
+
+rf_rs %>%
+  collect_metrics() %>%
+  filter(.metric == 'rmse') %>%
+  arrange(mean)
+
+rf_rs %>%
+  collect_predictions() %>%
+  mutate(SqError = (.pred - SalePrice)^2) %>%
+  pull(SqError) %>%
+  mean() %>%
+  sqrt()
+
+rf_best <- rf_rs %>%
+  select_best()
+rf_best
+
+
+last_fit <- 
+  rf_wf %>%
+  finalize_workflow(parameters = rf_best) %>%
+  last_fit(data_split)
+
+last_fit %>%
+  collect_predictions() %>%
+  ggplot(aes(SalePrice, .pred)) +
+  geom_point() +
+  coord_obs_pred()
+
+rf_fit <- 
+  rf_wf %>%
+  finalize_workflow(parameters = rf_best) %>%
+  fit(data = train_clean)
+```
+```{r}
+p_load(vip)
+
+
+rf_final <- finalize_model(rf_mod, rf_best)
+
+
+rf_final %>%
+  set_engine("ranger", importance = "permutation", model = ) %>%
+  fit(SalePrice ~ .,
+    data = prep(rf_rec) %>% juice() 
+  ) %>%
+  vip(geom = "point")
+```
+
+
+```{r}
+rf_rec <- recipe(SalePrice ~ ., data = train_clean) %>%
+  update_role(Id, new_role = "id variable")
+
+rf_mod <- 
+  rand_forest(mode = "regression",
+              mtry = 8, 
+              trees = 1000, 
+              min_n = 9) %>%
+  set_engine("ranger", importance = "permutation")
+
+rf_wf <- workflow() %>%
+  add_recipe(rf_rec) %>%
+  add_model(rf_mod)
+
+rf_fit <- fit(rf_wf, data = train_clean)
+bind_cols(
+  test_clean %>% select(Id),   
+  predict(rf_fit, new_data = test_clean) %>% transmute(SalePrice = 10^.pred)
+) %>%
+  write_csv("./submission.csv")
+```
+
+```{r}
+rf_fit %>%
+  extract_fit_parsnip() %>%
+  vip()
+```
 

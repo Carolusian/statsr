@@ -13,3 +13,9 @@ extract_refnum <- function(df, var) {
     select(refnum, colnames(df))
 }
 ```
+
+```
+df_fees <- df_fees |>
+  mutate(Total_Fee = rowSums(select(., starts_with("Fee_")), na.rm = TRUE)) |>
+  select(-any_of(fee_cols))
+```
